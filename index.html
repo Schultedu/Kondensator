@@ -589,6 +589,10 @@ body.inbattle .hand{background:rgba(14,10,8,.7);backdrop-filter:blur(3px)}
 body.inbattle .blog{color:#d8ccb4;text-shadow:0 1px 2px #000}
 body.inbattle .bbar .muted{color:#e0d4bc;text-shadow:0 1px 2px #000}
 body.inbattle .rsum{text-shadow:0 1px 3px #000}
+
+.qrbox{width:min(280px,80vw);margin:.6rem auto;background:#fff;border-radius:12px;padding:8px}
+.qrbox svg{width:100%;height:auto;display:block}
+.duelgrid textarea{font-family:ui-monospace,Menlo,monospace;font-size:.8rem}
 </style>
 </head>
 <body>
@@ -1981,14 +1985,17 @@ async function mpRoom(){
 function mpCodeGen(){const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let c='';for(let i=0;i<5;i++)c+=A[Math.floor(Math.random()*A.length)];return c;}
 function mpSend(m){if(!MP.sub)return;m.from=MP.me;m.code=MP.code;const warn=()=>{if(!MP.warned){MP.warned=1;toast('Senden nicht möglich – für Duelle brauchst du mindestens „Mitwirken“-Zugriff auf die Seite.');}};try{const r=MP.sub.emit('mp',m);if(r&&r.catch)r.catch(warn);}catch(e){warn();}}
 function mpEvery(fn,ms){const id=setInterval(fn,ms);MP.timers.push(id);return id;}
-function mpReset(){MP.timers.forEach(clearInterval);MP.timers=[];try{MP.sub&&MP.sub.leave&&MP.sub.leave();}catch(e){}
+function mpReset(){p2pClose();MP.timers.forEach(clearInterval);MP.timers=[];try{MP.sub&&MP.sub.leave&&MP.sub.leave();}catch(e){}
   Object.assign(MP,{sub:null,role:null,code:'',opp:'',seq:0,lastSeq:-1,ready:null,oppReady:null,lost:false,ui:{},banner:null,gid:'',results:0,round:0});}
 async function mpOpen(code,role){
   const room=await mpRoom();
   if(!room){toast('Das Duell funktioniert nur, wenn das Spiel über claude.ai geöffnet ist.');return false;}
   mpReset();
-  try{MP.sub=room.join?await room.join('kc-duell-'+code):room;}catch(e){toast('Verbindung fehlgeschlagen: '+(e.message||e));return false;}
-  MP.code=code;MP.role=role;MP.lastHeard=Date.now();
+  let sub;try{sub=room.join?await room.join('kc-duell-'+code):room;}catch(e){toast('Verbindung fehlgeschlagen: '+(e.message||e));return false;}
+  mpAttach(sub,code,role);return true;
+}
+function mpAttach(sub,code,role){
+  MP.sub=sub;MP.code=code;MP.role=role;MP.lastHeard=Date.now();
   MP.sub.on('mp',raw=>{const m=raw&&raw.t?raw:(raw&&raw.data)||raw;if(!m||m.from===MP.me||m.code!==MP.code)return;MP.lastHeard=Date.now();if(MP.lost){MP.lost=false;if(G&&G.mp)renderBattle();}mpOn(m);});
   try{MP.sub.presence&&MP.sub.presence({name:S.n,role});}catch(e){}
   mpEvery(()=>{ // Lebenszeichen und Verbindungsprüfung
@@ -1996,7 +2003,6 @@ async function mpOpen(code,role){
     const lost=MP.opp&&Date.now()-MP.lastHeard>15000;
     if(lost!==MP.lost){MP.lost=lost;if(G&&G.mp)renderBattle();}
   },2500);
-  return true;
 }
 async function mpHost(){
   const code=mpCodeGen();
@@ -2007,10 +2013,9 @@ async function mpJoin(code){
   code=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(code.length!==5){toast('Der Verbindungscode hat 5 Zeichen.');return;}
   if(!await mpOpen(code,'guest'))return;
-  renderDuel();
-  const t=mpEvery(()=>{if(MP.opp){clearInterval(t);return;}mpSend({t:'hello',name:S.n});},1500);
-  mpSend({t:'hello',name:S.n});
+  renderDuel();mpGuestHello();
 }
+function mpGuestHello(){const t=mpEvery(()=>{if(MP.opp){clearInterval(t);return;}mpSend({t:'hello',name:S.n});},1500);mpSend({t:'hello',name:S.n});}
 function mpLeave(){mpReset();prep=null;if(G&&G.mp)G=null;view='duel';renderHub();}
 function mpToPrep(){
   if(prep&&prep.pvp)return;
@@ -2147,11 +2152,99 @@ function mpRematch(remote){
   if(!remote)mpSend({t:'rematch'});
   mpToPrep();
 }
+
+/* =========================================================
+   DIREKTVERBINDUNG (WebRTC) – für das Spiel als normale Webseite
+   Ohne Server: Gastgeber erzeugt einen Einladungscode (QR), der Gast
+   antwortet mit einem Antwortcode (QR). Danach laufen alle Duell-
+   Nachrichten über einen direkten Datenkanal (gleiches Protokoll wie oben).
+   ========================================================= */
+const P2P={pc:null,dc:null,step:null,role:null,offer:'',answer:'',err:'',scan:null};
+const ICE=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
+const b64u=u=>{let s='';u.forEach(x=>s+=String.fromCharCode(x));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
+const unb64u=t=>{t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';const b=atob(t),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;};
+async function p2pPack(o){const j=JSON.stringify(o);
+  if(window.CompressionStream){const st=new Blob([j]).stream().pipeThrough(new CompressionStream('deflate-raw'));return 'Z'+b64u(new Uint8Array(await new Response(st).arrayBuffer()));}
+  return 'J'+b64u(new TextEncoder().encode(j));}
+async function p2pUnpack(c){c=String(c||'').trim().replace(/\s+/g,'');const k=c[0],u=unb64u(c.slice(1));
+  if(k==='Z'){const st=new Blob([u]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return JSON.parse(await new Response(st).text());}
+  if(k==='J')return JSON.parse(new TextDecoder().decode(u));throw new Error('Unbekannter Code');}
+const p2pWaitIce=pc=>new Promise(r=>{if(pc.iceGatheringState==='complete')return r();const t=setTimeout(r,4000);pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete'){clearTimeout(t);r();}});});
+function p2pSub(dc){const hs=[];dc.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(x){return;}hs.forEach(f=>f(m));};
+  return{emit:(t,d)=>{if(dc.readyState==='open')dc.send(JSON.stringify(d));},on:(t,fn)=>hs.push(fn),presence(){},leave(){}};}
+function p2pClose(){p2pStopScan();try{P2P.dc&&P2P.dc.close();}catch(e){}try{P2P.pc&&P2P.pc.close();}catch(e){}Object.assign(P2P,{pc:null,dc:null,step:null,role:null,offer:'',answer:'',err:''});}
+function p2pWatch(pc){pc.onconnectionstatechange=()=>{const st=pc.connectionState;
+  if(st==='failed'){P2P.err='Die Verbindung ist fehlgeschlagen. Seid ihr im selben WLAN? Über mobile Daten klappt die Direktverbindung oft nicht.';renderDuel();}
+  if((st==='disconnected'||st==='closed')&&MP.opp){MP.lost=true;if(G&&G.mp)renderBattle();}};}
+async function p2pHost(){
+  if(!window.RTCPeerConnection){toast('Dein Browser unterstützt keine Direktverbindung.');return;}
+  mpReset();const code=mpCodeGen();P2P.role='host';P2P.step='making';renderDuel();
+  const pc=new RTCPeerConnection({iceServers:ICE});P2P.pc=pc;p2pWatch(pc);
+  const dc=pc.createDataChannel('kc');P2P.dc=dc;
+  dc.onopen=()=>{P2P.step='open';mpAttach(p2pSub(dc),code,'host');renderDuel();};
+  await pc.setLocalDescription(await pc.createOffer());await p2pWaitIce(pc);
+  P2P.offer=await p2pPack({c:code,s:pc.localDescription.sdp});P2P.step='offer';renderDuel();
+}
+async function p2pAnswer(txt){
+  try{const o=await p2pUnpack(txt);if(!o.s||o.c)throw 0;await P2P.pc.setRemoteDescription({type:'answer',sdp:o.s});P2P.step='connecting';P2P.err='';renderDuel();}
+  catch(e){toast('Das ist kein gültiger Antwortcode.');}
+}
+async function p2pJoin(txt){
+  if(!window.RTCPeerConnection){toast('Dein Browser unterstützt keine Direktverbindung.');return;}
+  let o;try{o=await p2pUnpack(txt);if(!o.c||!o.s)throw 0;}catch(e){toast('Das ist kein gültiger Einladungscode.');return;}
+  mpReset();P2P.role='guest';P2P.step='making';renderDuel();
+  const pc=new RTCPeerConnection({iceServers:ICE});P2P.pc=pc;p2pWatch(pc);
+  pc.ondatachannel=e=>{const dc=e.channel;P2P.dc=dc;dc.onopen=()=>{P2P.step='open';mpAttach(p2pSub(dc),o.c,'guest');mpGuestHello();renderDuel();};};
+  await pc.setRemoteDescription({type:'offer',sdp:o.s});await pc.setLocalDescription(await pc.createAnswer());await p2pWaitIce(pc);
+  P2P.answer=await p2pPack({s:pc.localDescription.sdp});P2P.step='answer';renderDuel();
+}
+/* QR-Codes erzeugen und scannen (Bibliotheken werden erst bei Bedarf geladen) */
+const libs={};
+function loadLib(url){return libs[url]||(libs[url]=new Promise((ok,no)=>{const sc=document.createElement('script');sc.src=url;sc.onload=ok;sc.onerror=no;document.head.appendChild(sc);}));}
+async function qrInto(el,text){
+  try{await loadLib('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');const q=qrcode(0,'L');q.addData(text);q.make();el.innerHTML=q.createSvgTag({cellSize:3,margin:2,scalable:true});}
+  catch(e){el.innerHTML='<p class="small muted">QR-Code nicht verfügbar – bitte den Code kopieren.</p>';}
+}
+async function p2pStartScan(target){
+  try{await loadLib('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js');}catch(e){toast('Scanner konnte nicht geladen werden – bitte Code einfügen.');return;}
+  let stream;try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});}catch(e){toast('Kein Kamerazugriff – bitte Code einfügen.');return;}
+  modal(`<h2>📷 QR-Code scannen</h2><video id="qrv" playsinline muted style="width:100%;max-width:420px;border-radius:12px;background:#000"></video><p class="small muted">Halte die Kamera auf den QR-Code des anderen Geräts.</p><button class="btn ghost" data-act="p2pStopScan">Abbrechen</button>`);
+  const v=$('#qrv');v.srcObject=stream;await v.play().catch(()=>{});
+  const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
+  P2P.scan={stream,t:setInterval(()=>{if(!v.videoWidth)return;c.width=v.videoWidth;c.height=v.videoHeight;x.drawImage(v,0,0);
+    const r=jsQR(x.getImageData(0,0,c.width,c.height).data,c.width,c.height);
+    if(r&&r.data){p2pStopScan();closeModal();if(target==='offer')p2pJoin(r.data);else p2pAnswer(r.data);}},250)};
+}
+function p2pStopScan(){if(P2P.scan){clearInterval(P2P.scan.t);P2P.scan.stream.getTracks().forEach(t=>t.stop());P2P.scan=null;}}
+function p2pPanel(){
+  if(P2P.err)return `<div class="panel" style="max-width:700px;margin:0 auto;text-align:center"><h2>⚠️ Keine Verbindung</h2><p>${P2P.err}</p><button class="btn gold" data-act="mpLeave">Zurück</button></div>`;
+  if(P2P.step==='making')return `<div class="panel" style="max-width:700px;margin:0 auto;text-align:center"><h2>⏳ Code wird erstellt …</h2></div>`;
+  if(P2P.role==='host'&&(P2P.step==='offer'||P2P.step==='connecting'))return `<div class="panel" style="max-width:720px;margin:0 auto;text-align:center">
+    <h2>📡 Direktduell erstellt</h2><p><b>Schritt 1:</b> Dein Mitspieler scannt diesen QR-Code (oder du schickst ihm den Code).</p>
+    <div class="qrbox" id="qrOut"></div>
+    <div class="row2"><button class="btn small" data-act="p2pCopy" data-w="offer">📋 Einladungscode kopieren</button></div>
+    <hr class="sep"><p><b>Schritt 2:</b> Scanne den Antwort-QR-Code deines Mitspielers oder füge seinen Antwortcode ein.</p>
+    <div class="row2"><button class="btn gold" data-act="p2pScan" data-w="answer">📷 Antwort scannen</button></div>
+    <form id="p2pAnsForm" style="margin-top:.6rem"><textarea id="p2pAns" rows="3" placeholder="Antwortcode hier einfügen"></textarea><button class="btn" style="margin-top:.4rem">Verbinden</button></form>
+    ${P2P.step==='connecting'?'<p class="muted">⏳ Verbinde …</p>':''}<button class="btn ghost" data-act="mpLeave" style="margin-top:.6rem">Abbrechen</button></div>`;
+  if(P2P.role==='guest'&&P2P.step==='answer')return `<div class="panel" style="max-width:720px;margin:0 auto;text-align:center">
+    <h2>📡 Antwort für deinen Mitspieler</h2><p>Dein Mitspieler scannt jetzt diesen QR-Code (oder du schickst ihm den Antwortcode).</p>
+    <div class="qrbox" id="qrOut"></div><div class="row2"><button class="btn small" data-act="p2pCopy" data-w="answer">📋 Antwortcode kopieren</button></div>
+    <p class="muted">⏳ Warte auf Verbindung …</p><button class="btn ghost" data-act="mpLeave">Abbrechen</button></div>`;
+  if(P2P.step==='open')return `<div class="panel" style="max-width:700px;margin:0 auto;text-align:center"><h2>✅ Verbunden!</h2><p class="muted">⏳ ${MP.opp?esc(MP.opp)+' ist da …':'Einen Moment …'}</p></div>`;
+  return null;
+}
+function p2pLobby(){return `<div class="duelgrid" style="margin-top:1rem">
+    <div class="panel"><h2>📡 Direktduell erstellen</h2><p>Ohne claude.ai: Die beiden Geräte verbinden sich direkt – am besten im selben WLAN.</p><button class="btn gold" data-act="p2pHost">Direktduell erstellen</button></div>
+    <form class="panel" id="p2pJoinForm"><h2>📷 Direktduell beitreten</h2><p>Scanne den QR-Code deines Mitspielers oder füge seinen Einladungscode ein.</p>
+      <button type="button" class="btn gold" data-act="p2pScan" data-w="offer">📷 QR-Code scannen</button>
+      <textarea id="p2pOffer" rows="3" placeholder="…oder Einladungscode einfügen" style="margin-top:.6rem"></textarea><button class="btn" style="margin-top:.4rem">Beitreten</button></form></div>`;}
 async function renderDuel(){
   const v=$('#view');if(!v)return;
   const room=await mpRoom();
   if(view!=='duel')return;
-  if(!room){v.innerHTML=`<div class="panel" style="max-width:700px;margin:0 auto"><h2>🤝 Duell gegen Mitspieler</h2><p>Duelle zwischen zwei Spielern funktionieren nur, wenn das Spiel direkt über seinen claude.ai-Link geöffnet ist und beide Spieler Zugriff auf die Seite haben.</p></div>`;return;}
+  if(!(MP.code&&MP.done)){const pp=p2pPanel();if(pp){v.innerHTML=pp;const q=$('#qrOut');if(q)qrInto(q,P2P.role==='host'?P2P.offer:P2P.answer);return;}}
+  if(!room&&!MP.code){v.innerHTML=p2pLobby()+duelHelp();return;}
   if(MP.code&&MP.done){
     v.innerHTML=`<div class="panel" style="max-width:700px;margin:0 auto;text-align:center"><h2>🤝 Duell beendet</h2><p>Gegen ${esc(MP.opp)} · Code ${MP.code}</p><div class="row2"><button class="btn gold" data-act="mpRematch">🔁 Revanche</button><button class="btn ghost" data-act="mpLeave">Verlassen</button></div></div>`;return;
   }
@@ -2169,6 +2262,12 @@ async function renderDuel(){
       <li><b>Einsatz:</b> Der Gewinner erhält eine zufällige <b>gewöhnliche oder seltene</b> Karte aus der Sammlung des Verlierers – der Verlierer verliert sie. Epische und legendäre Karten sind nie im Einsatz.</li>
       <li>Bei Unentschieden verliert niemand eine Karte. Wer aufgibt, verliert das Duell.</li>
       <li>Bilanz: ${S.s.pw||0} Siege · ${S.s.pl||0} Niederlagen</li></ul></div></div>`;
+}
+function duelHelp(){return `<div class="panel" style="max-width:900px;margin:1rem auto 0"><h3>So funktioniert's</h3><ul class="small">
+  <li>Erstelle ein Direktduell: Es erscheint ein QR-Code. Dein Mitspieler scannt ihn, dann scannst du seinen Antwort-QR-Code – fertig. Ohne Kamera könnt ihr die Codes auch kopieren und z. B. per Messenger schicken.</li>
+  <li>Im gleichen WLAN klappt die Verbindung am zuverlässigsten. Über mobile Daten kann sie scheitern.</li>
+  <li><b>Einsatz:</b> Der Gewinner erhält eine zufällige gewöhnliche oder seltene Karte aus der Sammlung des Verlierers. Bei Unentschieden verliert niemand eine Karte.</li>
+  <li>Bilanz: ${S.s.pw||0} Siege · ${S.s.pl||0} Niederlagen</li></ul></div>`;
 }
 /* =========================================================
    EREIGNISSE
@@ -2201,6 +2300,10 @@ document.addEventListener('click',e=>{
     case 'mpHost':mpHost();break;
     case 'mpLeave':mpLeave();break;
     case 'mpReady':mpReady();break;
+    case 'p2pHost':p2pHost();break;
+    case 'p2pScan':p2pStartScan(ds.w);break;
+    case 'p2pStopScan':p2pStopScan();closeModal();break;
+    case 'p2pCopy':{const t=ds.w==='offer'?P2P.offer:P2P.answer;try{navigator.clipboard.writeText(t).then(()=>toast('Code kopiert!'),()=>toast('Kopieren nicht möglich.'));}catch(e){}break;}
     case 'mpRematch':mpRematch();break;
     case 'mpCopy':try{navigator.clipboard.writeText(MP.code).then(()=>toast('Code kopiert!'),()=>{});}catch(e){}break;
     case 'codexFilter':codexFilter=ds.f;openCodex();break;
@@ -2233,6 +2336,8 @@ document.addEventListener('submit',e=>{
   e.preventDefault();
   const f=e.target;
   if(f.id==='joinform'){mpJoin($('#jcode').value);return;}
+  if(f.id==='p2pJoinForm'){p2pJoin($('#p2pOffer').value);return;}
+  if(f.id==='p2pAnsForm'){p2pAnswer($('#p2pAns').value);return;}
   if(f.id==='aform')checkAnswer();
   else if(f.id==='newform'){const n=$('#pname').value.trim();if(!n){$('#newerr').textContent='Bitte gib einen Namen ein.';return;}startNew(n);}
   else if(f.id==='loadform'){try{login(readCode($('#pcode').value));}catch(err){$('#loaderr').textContent=err.message||'Der Code konnte nicht gelesen werden.';}}
