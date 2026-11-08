@@ -740,6 +740,59 @@ svg.tsk{display:block;width:100%;max-width:420px;margin:.6rem auto;background:#f
 .card.frN .ftype{left:6.47%!important;width:87.50%!important;top:66.34%!important;height:3.72%!important}
 .card.frN .fab{left:6.47%!important;width:87.50%!important;top:70.35%!important;height:15.81%!important}
 .card.frN .ffl{left:6.47%!important;width:72.92%!important;top:85.94%!important;height:6.95%!important}
+
+/* ================= Handy-Layout ================= */
+.tabs .ti{position:relative}.tabs .ts{display:none}.tabs .tl{margin-left:.35em}
+.menuname{display:none}.simob{display:none}
+@media(max-width:640px){
+  /* untere Navigationsleiste */
+  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;padding:.3rem .25rem calc(.35rem + env(safe-area-inset-bottom));margin:0;background:rgba(9,11,22,.96);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.5);backdrop-filter:blur(8px)}
+  .tabs button{display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.35rem .1rem .3rem;border-radius:10px;border:0;font-family:'Alegreya Sans',sans-serif;font-weight:700;min-width:0}
+  .tabs button.on{background:rgba(224,182,90,.14);border:0;color:var(--gold2)}
+  .tabs .ti{font-size:1.35rem;line-height:1.1}
+  .tabs .tl{display:none}.tabs .ts{display:block;font-size:.66rem;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .tabs .badge-dot{position:absolute;top:-4px;right:-10px;font-size:.6rem;min-width:16px;height:16px;line-height:16px;padding:0 3px}
+  body:not(.inbattle) #app{padding-bottom:calc(74px + env(safe-area-inset-bottom))}
+  main#view{padding-top:.7rem}
+  /* einzeilige Kopfzeile */
+  header.top{flex-wrap:nowrap;padding:.45rem .6rem;gap:.4rem}
+  .logo-sm{height:30px}
+  .namechip{display:none}.menuname{display:block;padding:.45rem .7rem .55rem;color:var(--gold2);font-weight:700;border-bottom:1px solid var(--line);margin-bottom:.2rem}
+  .chips{flex-wrap:nowrap;gap:.3rem}
+  /* Kartenschmiede */
+  .sifull{display:none}.simob{display:block;color:#7a6234;margin-top:.3rem}
+  .simob summary{cursor:pointer;font-weight:700;list-style:none}.simob summary::-webkit-details-marker{display:none}
+  .simob[open] summary{margin-bottom:.3rem}
+  .answer{display:grid;grid-template-columns:auto 1fr auto auto;gap:.4rem;align-items:center}
+  .answer input{min-width:0;max-width:none;width:100%}
+  .answer .unit{min-width:0}
+  .answer .btn{padding:.55em .8em}
+  /* Sammlung & Erfolge: lange Erklärtexte ausblenden */
+  .colhead p{display:none}
+  /* Bosse kompakt */
+  .boss{grid-template-columns:58px 1fr;gap:.5rem .7rem;padding:.7rem .8rem}
+  .boss .bport{width:58px;height:58px}
+  .boss .bcoins{font-size:.85rem}
+  .boss .binfo{cursor:pointer}
+  .boss .binfo h3{font-size:1.02rem;margin:.1rem 0}
+  .boss .binfo>p:not(.bpass),.boss .bpass,.boss .bmeter,.boss .brew{display:none}
+  .boss.open .binfo>p:not(.bpass),.boss.open .bpass,.boss.open .bmeter,.boss.open .brew{display:block}
+  .boss .binfo::after{content:'▾ Details';display:block;font-size:.72rem;color:var(--muted);margin-top:.1rem}
+  .boss.open .binfo::after{content:'▴ weniger'}
+  .boss .bact{grid-column:1/-1;display:flex;gap:.5rem;align-items:center;justify-content:space-between}
+  .boss .bact .btn{flex:1}
+  /* Erfolge kompakt */
+  .ach{padding:.6rem .7rem}
+  .ach .achbody{cursor:pointer}
+  .ach .achbody p,.ach .achrew{display:none}
+  .ach.open .achbody p,.ach.open .achrew{display:block}
+  .ach .achbody h3{font-size:.98rem;margin:.05rem 0 .3rem}
+  /* Händler & Duell: weniger Text */
+  .shophead p{display:none}
+  .howto ul{display:none}.howto.open ul{display:block}
+  body:not(.inbattle) .toast{bottom:calc(84px + env(safe-area-inset-bottom));width:max-content;max-width:88vw}
+  .howto h3{cursor:pointer;margin:0}.howto h3::after{content:' ▾';color:var(--muted)}.howto.open h3::after{content:' ▴'}
+}
 </style>
 </head>
 <body>
@@ -1323,7 +1376,7 @@ function claimAch(id){
   S.a.push(id);persist();renderHub();
   revealCards(ids,flags,`🏅 ${a.n}`,`Erfolg „${TIER[a.tier].n}“ eingesammelt – deine Belohnung: <b>${COIN_HTML} ${coins} Münzen</b> und:`);
 }
-const achTabLabel=()=>{const n=achClaimable();return `🏅 Erfolge${n?` <span class="badge-dot">${n}</span>`:''}`;};
+const achTabLabel=()=>{const n=achClaimable();return `<span class="ti">🏅${n?`<span class="badge-dot">${n}</span>`:''}</span><span class="tl">Erfolge</span><span class="ts">Erfolge</span>`;};
 function renderAch(){
   const done=ACH.filter(a=>achState(a).claimed).length;
   $('#view').innerHTML=`<div class="panel colhead"><div>🏅 <b>Erfolge:</b> ${done} / ${ACH.length} eingesammelt</div>
@@ -1331,7 +1384,7 @@ function renderAch(){
     <div class="achgrid">${ACH.map(a=>{const st=achState(a),t=TIER[a.tier],pct=Math.round(st.cur/st.max*100);
       return `<div class="ach panel ${st.claimed?'claimed':st.done?'ready':''}" style="--tc:${t.c}">
         <div class="achic pic"><img src="achic/${a.id}.webp" alt="" onerror="this.parentNode.classList.remove('pic');this.replaceWith('${a.ic}')"></div>
-        <div class="achbody"><div class="achtier">${t.n}</div><h3>${a.n}</h3><p>${a.d}</p>
+        <div class="achbody" data-act="tgl"><div class="achtier">${t.n}</div><h3>${a.n}</h3><p>${a.d}</p>
           <div class="bar"><i class="${st.done?'ok':''}" style="width:${pct}%"></i></div>
           <div class="small muted" style="margin-top:.25rem">${a.label?a.label():`${st.cur} / ${st.max}`}</div>
           <div class="achrew">Belohnung: <b class="coinamt"><i class="coin"></i> ${TIER_COINS[a.tier]}</b> ${TIER_REWARD[a.tier].map(r=>`<span class="rtag r${r}">${RAR[r].n}</span>`).join(' ')}</div></div>
@@ -1998,16 +2051,18 @@ function renderHub(){
   if(view!=='battle')document.body.classList.remove('inbattle');
   if(view==='battle'){renderBattle();return;}
   const tv=view==='prep'?(prep&&prep.pvp?'duel':'bosses'):view;
-  const tab=(k,l)=>`<button class="${tv===k?'on':''}" data-act="view" data-v="${k}">${l}</button>`;
+  const tab=(k,l)=>`<button class="${tv===k?'on':''}" data-act="view" data-v="${k}" aria-current="${tv===k?'page':'false'}">${l}</button>`;
+  const TL=(i,l,sh)=>`<span class="ti">${i}</span><span class="tl">${l}</span><span class="ts">${sh}</span>`;
   app.innerHTML=`<header class="top">
     <div class="logo"><img class="logo-sm" src="${LOGO_SMALL}" alt="Kondensator-Chroniken"></div>
     <div class="chips">
-      <span class="chip" title="Spieler">🧝 ${esc(S.n)}</span>
+      <span class="chip namechip" title="Spieler">🧝 ${esc(S.n)}</span>
       <button class="chip coinchip" data-act="view" data-v="shop" title="Deine Münzen – zum Händler"><i class="coin"></i> <b>${S.s.coins||0}</b></button>
       <span class="chip" title="Besiegte Bosse">⚔️ ${S.b.length}/${BOSSES.length}</span>
       <div class="menuwrap">
         <button class="btn small ghost save ${dirty?'dirty':''}" data-act="menu" aria-haspopup="true" aria-expanded="false">☰ Menü</button>
         <div class="menudrop" role="menu">
+          <div class="menuname">🧝 ${esc(S.n)}</div>
           <button role="menuitem" data-act="music">${MUS.on?"🎵":"🔇"} Musik</button>
           <button role="menuitem" data-act="rules">📖 Regeln</button>
           <button role="menuitem" data-act="save">💾 Speichercode</button>
@@ -2015,7 +2070,7 @@ function renderHub(){
       </div>
       <button class="btn small ghost iconbtn" data-act="logout" title="Ausloggen" aria-label="Ausloggen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
     </div></header>
-    <nav class="tabs">${tab('tasks','📜 Kartenschmiede')}${tab('cards','🃏 Sammlung')}${tab('bosses','⚔️ Bosse')}${tab('shop','🛒 Händler')}${tab('duel','🤝 Duell')}${tab('ach',achTabLabel())}</nav>
+    <nav class="tabs" aria-label="Bereiche">${tab('tasks',TL('📜','Kartenschmiede','Schmiede'))}${tab('cards',TL('🃏','Sammlung','Karten'))}${tab('bosses',TL('⚔️','Bosse','Bosse'))}${tab('shop',TL('🛒','Händler','Händler'))}${tab('duel',TL('🤝','Duell','Duell'))}${tab('ach',achTabLabel())}</nav>
     <main id="view"></main>`;
   if(view==='tasks')renderTasks();else if(view==='cards')renderCards();else if(view==='prep')renderPrep();else if(view==='ach')renderAch();else if(view==='duel')renderDuel();else if(view==='shop')renderShop();else renderBosses();
 }
@@ -2047,7 +2102,7 @@ function renderTasks(){
         ${t.kind==='text'?'':`<span class="unit" title="${SIBASE[t.unit]?'SI-Basiseinheiten: '+SIBASE[t.unit]:''}">${t.unit||'<span class="small">(ohne Einheit)</span>'}</span>`}
         <button class="btn gold" ${r?'disabled':''}>Prüfen</button>
       </form>
-      ${t.kind==='text'?'<div class="small" style="color:#7a6234">✍️ Groß-/Kleinschreibung und kleine Tippfehler sind egal.</div>':`<div class="small" style="color:#7a6234">📏 Antwort immer in <b>SI-Einheiten ohne Vorsilben</b> (m, m², C, F, V, V/m, N, N/C, J), auf 3 gültige Ziffern. Schreibweise z. B. <b>4,7e-6</b> oder <b>4,7·10^-6</b>.${t.unit&&t.unit!=='m'&&t.unit!=='m²'&&SIBASE[t.unit]?` <span title="in SI-Basiseinheiten">(1 ${t.unit} = 1 ${SIBASE[t.unit]})</span>`:''}</div>`}`}
+      ${t.kind==='text'?'<div class="small" style="color:#7a6234">✍️ Groß-/Kleinschreibung und kleine Tippfehler sind egal.</div>':`<div class="small sifull" style="color:#7a6234">📏 Antwort immer in <b>SI-Einheiten ohne Vorsilben</b> (m, m², C, F, V, V/m, N, N/C, J), auf 3 gültige Ziffern. Schreibweise z. B. <b>4,7e-6</b> oder <b>4,7·10^-6</b>.${t.unit&&t.unit!=='m'&&t.unit!=='m²'&&SIBASE[t.unit]?` <span title="in SI-Basiseinheiten">(1 ${t.unit} = 1 ${SIBASE[t.unit]})</span>`:''}</div><details class="simob small"><summary>ℹ️ SI-Einheiten &amp; Schreibweise</summary>📏 Antwort immer in <b>SI-Einheiten ohne Vorsilben</b> (m, m², C, F, V, V/m, N, N/C, J), auf 3 gültige Ziffern. Schreibweise z. B. <b>4,7e-6</b> oder <b>4,7·10^-6</b>.${t.unit&&t.unit!=='m'&&t.unit!=='m²'&&SIBASE[t.unit]?` <span title="in SI-Basiseinheiten">(1 ${t.unit} = 1 ${SIBASE[t.unit]})</span>`:''}</details>`}`}
       <div style="margin-top:.6rem">${t.showHint?`<span id="hint">💡 ${t.hint}</span>`:(r?'':'<button class="btn small ghost" style="color:#5a3d0f;border-color:#b8975a" data-act="hint">💡 Tipp anzeigen <span style="font-weight:400">(−'+HINT_MALUS+' % Episch-Chance)</span></button>')}</div>
       <div id="feedback">${fb}</div>
     </section>
@@ -2096,7 +2151,7 @@ function renderBosses(){
     return `<div class="boss panel ${open?'':'locked'} ${done?'done':''}">
       <div class="bleft"><div class="bport">${open?cardArt(b.deck[0]):'🔒'}</div>
         <div class="bcoins" title="${done?'Münzen bei einem weiteren Sieg (2 %)':'Münzen beim ersten Sieg'}"><i class="coin"></i> ${done?Math.max(1,Math.round(bossCoins(i)*0.02)):bossCoins(i)}</div></div>
-      <div class="binfo"><div class="bort">Boss ${i+1} · ${b.ort}</div><h3>${open?b.n:'???'}</h3>
+      <div class="binfo" data-act="tgl"><div class="bort">Boss ${i+1} · ${b.ort}</div><h3>${open?b.n:'???'}</h3>
         <p>${open?b.txt:'Besiege zuerst den vorherigen Boss.'}</p>${open&&b.passTxt?`<p class="bpass">✦ ${b.passTxt}</p>`:''}
         <div class="bmeter"><div class="bmlab">Stärke deiner besten 10 Karten: ${str} · empfohlen ${b.rec}</div><div class="bar"><i class="${str>=b.rec?'ok':''}" style="width:${pct}%"></i></div></div>
         <div class="brew">Belohnung beim ersten Sieg: <span class="rtag r${b.rew}">${RAR[b.rew].n}e Karte</span></div></div>
@@ -2834,13 +2889,13 @@ async function renderDuel(){
   v.innerHTML=`<div class="duelgrid">
     <div class="panel"><h2>🆕 Duell erstellen</h2><p>Du bekommst einen Verbindungscode, den du deinem Mitspieler gibst.</p><button class="btn gold" data-act="mpHost">Duell erstellen</button></div>
     <form class="panel" id="joinform"><h2>🔑 Duell beitreten</h2><p>Gib den Code deines Mitspielers ein:</p><input id="jcode" maxlength="5" autocomplete="off" placeholder="z. B. K7QXM" style="text-transform:uppercase;font-size:1.3rem;letter-spacing:.2em;text-align:center"><button class="btn gold" style="margin-top:.6rem">Beitreten</button></form>
-    <div class="panel" style="grid-column:1/-1"><h3>So funktioniert's</h3><ul class="small">
+    <div class="panel howto" style="grid-column:1/-1"><h3 data-act="tgl">So funktioniert's</h3><ul class="small">
       <li>Beide wählen eine Starthand mit bis zu 10 Karten aus ihrer Sammlung. Es gelten die normalen Regeln: 2 von 3 Runden gewinnen.</li>
       <li><b>Einsatz:</b> Der Gewinner erhält eine zufällige <b>gewöhnliche oder seltene</b> Karte aus der Sammlung des Verlierers – der Verlierer verliert sie. Epische und legendäre Karten sind nie im Einsatz.</li>
       <li>Bei Unentschieden verliert niemand eine Karte. Wer aufgibt, verliert das Duell.</li>
       <li>Bilanz: ${S.s.pw||0} Siege · ${S.s.pl||0} Niederlagen</li></ul></div></div>`;
 }
-function duelHelp(){return `<div class="panel" style="max-width:900px;margin:1rem auto 0"><h3>So funktioniert's</h3><ul class="small">
+function duelHelp(){return `<div class="panel howto" style="max-width:900px;margin:1rem auto 0"><h3 data-act="tgl">So funktioniert's</h3><ul class="small">
   <li>Erstelle ein Direktduell: Es erscheint ein QR-Code. Dein Mitspieler scannt ihn, dann scannst du seinen Antwort-QR-Code – fertig. Ohne Kamera könnt ihr die Codes auch kopieren und z. B. per Messenger schicken.</li>
   <li>Im gleichen WLAN klappt die Verbindung am zuverlässigsten. Über mobile Daten kann sie scheitern.</li>
   <li><b>Einsatz:</b> Der Gewinner erhält eine zufällige gewöhnliche oder seltene Karte aus der Sammlung des Verlierers. Bei Unentschieden verliert niemand eine Karte.</li>
@@ -2909,6 +2964,7 @@ document.addEventListener('click',e=>{
   const a=el.dataset.act,ds=el.dataset;
   switch(a){
     case 'closeModal':closeModal();break;
+    case 'tgl':if(matchMedia('(max-width:640px)').matches){const pn=el.closest('.panel');if(pn)pn.classList.toggle('open');}break;
     case 'continue':try{login(readCode(localStorage.getItem('kc_save')));}catch(err){toast(err.message);}break;
     case 'view':view=ds.v;renderHub();break;
     case 'menu':{const w=el.closest('.menuwrap'),o=w.classList.toggle('open');el.setAttribute('aria-expanded',o);break;}
