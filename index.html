@@ -1952,10 +1952,22 @@ function newTask(){
   curTask=Object.assign(t.kind?t:toSI(t),{lvl:taskLvl,result:null,showHint:false});
 }
 function parseNum(s){
-  s=String(s).trim().replace(/\s+/g,'').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]/g,c=>Object.keys(SUP).find(k=>SUP[k]===c)).replace(/,/g,'.').replace(/−/g,'-').replace(/[·⋅×xX]/g,'*');
-  const m=s.match(/^([-+]?\d*\.?\d+)(?:(?:\*10\^?|e)([-+]?\d+))?$/i);
-  if(!m) return NaN;
-  return parseFloat(m[1])*Math.pow(10,m[2]?parseInt(m[2],10):0);
+  // akzeptiert u. a.: 12,5 · 4,7e-6 · 4,7E+6 · 4,7*10^-6 · 4,7·10^(−6) · 4,7x10^6 · 4,7×10⁻⁶ · 10^6 · 10^-6 · -10^3 · 4,7 10^-6 · 4,7*10**-6 · 4,7*10hoch-6
+  const SUPR={'⁻':'-','⁺':'+','⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9'};
+  s=String(s).trim().toLowerCase()
+    .replace(/[−–—‒]/g,'-').replace(/[ˆ＾∧]/g,'^').replace(/\*\*/g,'^').replace(/hoch/g,'^')
+    .replace(/([⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g,m=>'^'+[...m].map(c=>SUPR[c]).join(''))   // Hochzahlen-Zeichen → ^…
+    .replace(/(\d)\s+(?=10\s*\^)/g,'$1*')                                           // „4,7 10^-6“
+    .replace(/\s+/g,'').replace(/,/g,'.')
+    .replace(/[·⋅×x•∙]/g,'*').replace(/[(){}\[\]]/g,'');
+  const N='(\\d+(?:\\.\\d*)?|\\.\\d+)';
+  let m=s.match(new RegExp('^([-+]?)'+N+'?\\*?10\\^\\+?(-?\\d+)$'));        // a·10^b oder 10^b
+  if(m){const a=m[2]===undefined?1:parseFloat(m[2]);return (m[1]==='-'?-1:1)*a*Math.pow(10,parseInt(m[3],10));}
+  m=s.match(new RegExp('^([-+]?)'+N+'e([-+]?\\d+)$'));                        // 4.7e-6
+  if(m)return (m[1]==='-'?-1:1)*parseFloat(m[2])*Math.pow(10,parseInt(m[3],10));
+  m=s.match(new RegExp('^([-+]?)'+N+'$'));
+  if(m)return (m[1]==='-'?-1:1)*parseFloat(m[2]);
+  return NaN;
 }
 /* ---------- Geheimcode „Klarsicht“: Übersicht über alle Karten ---------- */
 const SECRET_CODE='klarsicht';
@@ -1988,7 +2000,7 @@ function checkAnswer(){
     ok=matchTerm(raw)===curTask.term;
   }else{
     const v=parseNum(raw);
-    if(isNaN(v)){toast('Bitte gib eine Zahl ein (z. B. 12,5).');return;}
+    if(isNaN(v)){toast('Bitte gib eine Zahl ein, z. B. 12,5 oder 4,7·10^-6 oder 10^6.');return;}
     ok=Math.abs(v-curTask.ans)<=Math.abs(curTask.ans)*0.02;
   }
   finishAnswer(ok,raw);
@@ -2102,7 +2114,7 @@ function renderTasks(){
         ${t.kind==='text'?'':`<span class="unit" title="${SIBASE[t.unit]?'SI-Basiseinheiten: '+SIBASE[t.unit]:''}">${t.unit||'<span class="small">(ohne Einheit)</span>'}</span>`}
         <button class="btn gold" ${r?'disabled':''}>Prüfen</button>
       </form>
-      ${t.kind==='text'?'<div class="small" style="color:#7a6234">✍️ Groß-/Kleinschreibung und kleine Tippfehler sind egal.</div>':`<div class="small sifull" style="color:#7a6234">📏 Antwort immer in <b>SI-Einheiten ohne Vorsilben</b> (m, m², C, F, V, V/m, N, N/C, J), auf 3 gültige Ziffern. Schreibweise z. B. <b>4,7e-6</b> oder <b>4,7·10^-6</b>.${t.unit&&t.unit!=='m'&&t.unit!=='m²'&&SIBASE[t.unit]?` <span title="in SI-Basiseinheiten">(1 ${t.unit} = 1 ${SIBASE[t.unit]})</span>`:''}</div><details class="simob small"><summary>ℹ️ SI-Einheiten &amp; Schreibweise</summary>📏 Antwort immer in <b>SI-Einheiten ohne Vorsilben</b> (m, m², C, F, V, V/m, N, N/C, J), auf 3 gültige Ziffern. Schreibweise z. B. <b>4,7e-6</b> oder <b>4,7·10^-6</b>.${t.unit&&t.unit!=='m'&&t.unit!=='m²'&&SIBASE[t.unit]?` <span title="in SI-Basiseinheiten">(1 ${t.unit} = 1 ${SIBASE[t.unit]})</span>`:''}</details>`}`}
+      ${t.kind==='text'?'<div class="small" style="color:#7a6234">✍️ Groß-/Kleinschreibung und kleine Tippfehler sind egal.</div>':`<div class="small sifull" style="color:#7a6234">📏 Antwort immer in <b>SI-Einheiten ohne Vorsilben</b> (m, m², C, F, V, V/m, N, N/C, J), auf 3 gültige Ziffern. Schreibweise z. B. <b>4,7·10^-6</b>, <b>4,7*10^6</b>, <b>10^-3</b> oder <b>4,7e-6</b>.${t.unit&&t.unit!=='m'&&t.unit!=='m²'&&SIBASE[t.unit]?` <span title="in SI-Basiseinheiten">(1 ${t.unit} = 1 ${SIBASE[t.unit]})</span>`:''}</div><details class="simob small"><summary>ℹ️ SI-Einheiten &amp; Schreibweise</summary>📏 Antwort immer in <b>SI-Einheiten ohne Vorsilben</b> (m, m², C, F, V, V/m, N, N/C, J), auf 3 gültige Ziffern. Schreibweise z. B. <b>4,7·10^-6</b>, <b>4,7*10^6</b>, <b>10^-3</b> oder <b>4,7e-6</b>.${t.unit&&t.unit!=='m'&&t.unit!=='m²'&&SIBASE[t.unit]?` <span title="in SI-Basiseinheiten">(1 ${t.unit} = 1 ${SIBASE[t.unit]})</span>`:''}</details>`}`}
       <div style="margin-top:.6rem">${t.showHint?`<span id="hint">💡 ${t.hint}</span>`:(r?'':'<button class="btn small ghost" style="color:#5a3d0f;border-color:#b8975a" data-act="hint">💡 Tipp anzeigen <span style="font-weight:400">(−'+HINT_MALUS+' % Episch-Chance)</span></button>')}</div>
       <div id="feedback">${fb}</div>
     </section>
